@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  oracle-db:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: ecotrack-oracle
+    ports:
+      - "1521:1521"
+      - "5500:5500"
+    environment:
+      - ORACLE_PWD=EcoTrack2025
+      - ORACLE_CHARACTERSET=AL32UTF8
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ./init-scripts:/docker-entrypoint-initdb.d/setup
+    healthcheck:
+      test: ["CMD", "sqlplus", "-L", "sys/EcoTrack2025@//localhost:1521/XE as sysdba", "@healthcheck.sql"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  ecotrack-app:
+    build: .
+    container_name: ecotrack-app
+    depends_on:
+      oracle-db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:oracle:thin:@oracle-db:1521:XE
+      - SPRING_DATASOURCE_USERNAME=ecotrack
+      - SPRING_DATASOURCE_PASSWORD=ecotrack
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+      - SPRING_FLYWAY_ENABLED=true
+      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=true
+    restart: unless-stopped
+
+volumes:
+  oracle-data:
+    driver: local
